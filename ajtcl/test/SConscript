@@ -1,0 +1,77 @@
+Import('env')
+
+test_env = env.Clone()
+
+test_env.Append(LIBPATH = ['#dist/lib', '#build/$VARIANT'])
+test_env.Append(LIBS = "ajtcl")
+
+progs = []
+
+progs.extend([
+            test_env.Program('mutter', ['mutter.c']),
+            test_env.Program('ajlite', ['ajlite.c']),
+            test_env.Program('aestest', ['aestest.c']),
+            test_env.Program('aesbench', ['aesbench.c']),
+            test_env.Program('svclite', ['svclite.c']),
+            test_env.Program('clientlite', ['clientlite.c']),
+            test_env.Program('siglite', ['siglite.c']),
+            test_env.Program('sessionslite', ['sessionslite.c']),
+            test_env.Program('nvramtest', ['nvramtest.c']),
+            test_env.Program('nvramdump', ['nvramdump.c']),
+            test_env.Program('nvrampersistencetest', ['nvrampersistencetest.c']),
+            test_env.Program('bastress2', ['bastress2.c']),
+            test_env.Program('certificate', ['certificate.c']),
+            test_env.Program('base64', ['base64.c']),
+            test_env.Program('codisco', ['codisco.c']),
+            test_env.Program('sigtest', ['sigtest.c']),
+            test_env.Program('ctrdrbg', ['ctrdrbg.c']),
+            test_env.Program('shatest', ['shatest.c']),
+            test_env.Program('doorsvc', ['doorsvc.c']),
+            test_env.Program('ecctest', ['ecctest.c'])
+        ])
+
+# Build the test programs on win32/linux
+if test_env['TARG'] == 'win32' or test_env['TARG'] == 'linux':
+    progs.extend([
+        test_env.Program('sessions', ['sessions.c']),
+        test_env.Program('marshal_unmarshal_test', ['marshal_unmarshal_test.c'])
+    ])
+
+#     if test_env['TARG'] == 'linux-uart':
+#         test_env.Object('uarttest.o', ['uarttest.c'])
+#         test_env.Object('uarttest1.o', ['uarttest1.c'])
+#         test_env.Object('uartbigsmallsend.o', ['uartbigsmall.c'])
+#         test_env.Object('echo.o', ['echo.c'])
+
+#         progs.extend([
+#             test_env.Program('timertest', ['timertest.c']),
+#             test_env.Program('semaphoretest', ['semaphoretest.c']),
+#             test_env.Program('uarttest', ['uarttest.c']),
+#             test_env.Program('uarttest1', ['uarttest1.o']),
+#             test_env.Program('uartbigsmallsend', ['uartbigsmallsend.o']),
+#             test_env.Program('echo', ['echo.o'])
+#         ])
+#         # Buld the same source into the receiving side executable
+#         uartTest_Env = test_env.Clone()
+#         uartTest_Env.Append(CPPDEFINES = ['READTEST'])
+
+#         uartTest_Env.Object('uartbigsmallrecv.o', ['uartbigsmall.c'])
+#         uartTest_Env.Object('uarttestReceiver.o', ['uarttest.c'])
+#         uartTest_Env.Object('uarttest1Receiver.o', ['uarttest1.c'])
+#         uartTest_Env.Object('echoReceiver.o', ['echo.c'])
+
+#         progs.extend([
+#             uartTest_Env.Program('uartbigsmallrecv', ['uartbigsmallrecv.o']),
+#             uartTest_Env.Program('uarttestReceiver', ['uarttestReceiver.o']),
+#             uartTest_Env.Program('uarttest1Receiver', ['uarttest1Receiver.o']),
+#             uartTest_Env.Program('echoReceiver', ['echoReceiver.o'])
+#         ])
+
+# if test_env['TARG'] == 'on':
+#     test_env.Program('wsltest', ['WSL/unit_test.c'])
+#     test_env.Program('bufferlisttest', ['WSL/bufferlisttest.c'])
+#     test_env.Program('spi_test', ['WSL/spi_test.c'])
+#     test_env.Program('unmarshal_test', ['WSL/unmarshal_test.c'])
+
+if progs:
+    test_env.Install('#dist/test', progs)

@@ -1,0 +1,177 @@
+# Copyright AllSeen Alliance. All rights reserved.
+#
+#    Permission to use, copy, modify, and/or distribute this software for any
+#    purpose with or without fee is hereby granted, provided that the above
+#    copyright notice and this permission notice appear in all copies.
+#
+#    THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+#    WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+#    MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+#    ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+#    WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+#    ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+#    OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+#
+import subprocess
+
+Import('env')
+
+# Call this function to verify there is a valid developer license to run the unit test.
+def have_developer_license():
+    from ctypes import windll, byref, create_string_buffer
+    have_valid_license = False
+    try:
+        filetime = create_string_buffer(8)    # buffer the size of a FILETIME structure
+        if windll.wsclient.CheckDeveloperLicense(byref(filetime)) == 0:
+            have_valid_license = True
+    except:
+        pass
+
+    if not have_valid_license:
+        print('Warning: No valid Windows Store developer license detected, unit tests will not be run.')
+    return have_valid_license
+
+def builder_check(target, source, env):
+    check = str(source[0].abspath)
+    return subprocess.call(check)
+
+env.Append(BUILDERS = {'Check' : Builder(action = builder_check)})
+
+if not env.has_key('GTEST_DIR'):
+    print('GTEST_DIR not specified skipping alljoyn_core unit test build')
+
+elif env['OS'] == 'darwin' and env['CPU'] in ['arm', 'armv7', 'armv7s', 'arm64',]:
+    # do not even try Google test if darwin and arm
+    print 'GTEST_DIR ignored when building for OS=darwin CPU=arm, skipping alljoyn_core unit test build'
+
+else:
+    gtest_env = env.Clone();
+    gtest_dir = gtest_env['GTEST_DIR']
+    vars = Variables();
+    vars.AddVariables(('GTEST_HOME', '', gtest_dir))
+    vars.Update(gtest_env)
+
+    if gtest_env['CXX'].startswith('clang'):
+        # Suppress a clang warning in google-test code.
+        gtest_env.Append(CPPFLAGS = ['-Wno-unused-private-field'])
+
+    if gtest_dir == '/usr':
+        gtest_src_base = '%s/src/gtest' % gtest_dir
+    else:
+        gtest_src_base = gtest_dir
+
+    if gtest_env['OS_CONF'] == 'windows':
+        # gTest does not require the same CPPDEFINES as AllJoyn core.
+        gtest_env.Append(CPPDEFINES = ['WIN32', '_LIB'])
+        # don't use the _DEBUG define unless the /MDd compiler flag is specified
+        #gtest_env.Append(CPPDEFINES = ['WIN32', '_DEBUG', '_LIB'])
+        gtest_env.Append(CXXFLAGS = ['/EHsc'])
+
+    if gtest_env['OS_CONF'] == 'android':
+        # used by gtest to prevent use of wcscasecmp and set GTEST_HAS_STD_WSTRING=0
+        gtest_env.Append(CPPDEFINES = ['ANDROID'])
+
+    # tr1::tuple is not avalible for android or darwin
+    if gtest_env['OS_CONF'] == 'android' or gtest_env['OS_CONF'] == 'darwin':
+        gtest_env.Append(CPPDEFINES = ['GTEST_HAS_TR1_TUPLE=0'])
+
+    # clone() library function is NOT available on android-x86
+    if gtest_env['OS_CONF'] == 'android' and gtest_env['CPU'] == 'x86':
+        gtest_env.Append(CPPDEFINES = ['GTEST_HAS_CLONE=0'])
+
+    # Microsoft Visual Studio 2012 has a different _VARIADIC_MAX default value.
+    # See: http://blogs.msdn.com/b/vcblog/archive/2011/09/12/10209291.aspx
+    if gtest_env['OS_CONF'] == 'windows' and (gtest_env['MSVC_VERSION'] == '11.0' or gtest_env['MSVC_VERSION'] == '11.0Exp'):
+        gtest_env.Append(CPPDEFINES = ['_VARIADIC_MAX=10'])
+
+    # we compile with no rtti and we are not using exceptions.
+    gtest_env.Append(CPPDEFINES = ['GTEST_HAS_RTTI=0'])
+
+    # we replace AllJoyn's include CPPPATH options.  AllJoyn includes stlport that will cause the
+    # gTest code to not compile as expected at this time
+    gtest_env.Append(CPPPATH = [ gtest_src_base ])
+    if gtest_dir != '/usr':
+        gtest_env.Append(CPPPATH = [ gtest_env.Dir('$GTEST_DIR/include') ])
+
+    gtest_obj = gtest_env.StaticObject(target = 'gtest-all', source = [ '%s/src/gtest-all.cc' % gtest_src_base ])
+    gtest_env.StaticLibrary(target = 'gtest', source = gtest_obj)
+
+    unittest_env = env.Clone()
+
+    if unittest_env['BR'] == 'on':
+        # Build apps with bundled daemon support
+        unittest_env.Prepend(LIBS = [unittest_env['ajrlib']])
+    # Add private header include path to test bundled router code
+    unittest_env.Append(CPPPATH = [ unittest_env.Dir('../router').srcnode() ])
+
+    unittest_env.Append(CPPPATH = unittest_env.Dir('..').srcnode())
+
+    gtest_dir = unittest_env['GTEST_DIR']
+    if gtest_dir != '/usr':
+        unittest_env.Append(CPPPATH = [gtest_dir + '/include'])
+
+    if unittest_env['OS_GROUP'] == 'windows':
+        unittest_env.Append(CXXFLAGS = ['/EHsc'])
+
+    # we compile with no rtti and we are not using exceptions.
+    unittest_env.Append(CPPDEFINES = ['GTEST_HAS_RTTI=0'])
+
+    if unittest_env['OS_CONF'] == 'android':
+        # used by gtest to prevent use of wcscasecmp and set GTEST_HAS_STD_WSTRING=0
+        unittest_env.Append(CPPDEFINES = ['ANDROID'])
+
+    # tr1::tuple is not avalible for android or darwin
+    if unittest_env['OS_CONF'] == 'android' or unittest_env['OS_CONF'] == 'darwin':
+        unittest_env.Append(CPPDEFINES = ['GTEST_HAS_TR1_TUPLE=0'])
+    if unittest_env['OS_CONF'] == 'android' and unittest_env['CPU'] == 'x86':
+        unittest_env.Append(CPPDEFINES = ['GTEST_HAS_CLONE=0'])
+    if unittest_env['OS_CONF'] == 'windows' and unittest_env['MSVC_VERSION'] == '11.0':
+        unittest_env.Append(CPPDEFINES = ['_VARIADIC_MAX=10'])
+    # gtest library file is placed on folder above the the object files.
+    unittest_env.Append(LIBPATH = ['./'])
+
+    unittest_env.Prepend(LIBS = ['gtest'])
+
+    ajtest_src = unittest_env.Glob('*.cc')
+    if unittest_env['BR'] != 'on':
+        # need to remove DiscoveryDeathTest.cc from sources
+        ajtest_src = [l for l in unittest_env.Glob('*.cc') if not l.path.endswith('DiscoveryDeathTest.cc')]
+
+    ajtest_obj = unittest_env.Object(ajtest_src);
+    ajtest_prog = unittest_env.Program('ajtest', ajtest_obj)
+    unittest_env.Install('$TESTDIR/cpp/bin', ajtest_prog)
+
+    # 'Pure' unit tests that don't have external dependencies.  These
+    # are intended to be run frequently during development; individual
+    # tests should complete in under 10 msecs.
+    #
+    # The Replace/Prepend lines below are to remove ajrlib if it is being linked
+    # in since we don't want to startup a bundled router for these tests and
+    # instead want to link explicitly with the router objects.
+    check_env = unittest_env.Clone()
+    check_env.Replace(LIBS = [l for l in check_env['LIBS'] if l != check_env['ajrlib']])
+    check_env.Prepend(LIBS = [check_env['srobj'], check_env['router_objs']])
+
+    ajcheck_src = check_env.Glob('check/*.cc')
+    vars = Variables()
+    vars.Add(EnumVariable('POLICYDB', 'Enable policy support', 'off', allowed_values=('on', 'off')))
+    vars.Update(check_env)
+
+    if check_env['POLICYDB'] == 'on':
+        check_env.Append(CPPDEFINES = ['ENABLE_POLICYDB'])
+        check_env.Append(CPPPATH = [ check_env.Dir('../router/policydb').srcnode() ])
+
+    ajcheck_objs = [ obj for obj in ajtest_obj if str(obj).startswith('ajTestCommon') ] + check_env.Object(ajcheck_src)
+    ajcheck_prog = check_env.Program('ajcheck', ajcheck_objs)
+    check_env.Install('$TESTDIR/cpp/bin', ajcheck_prog)
+    if check_env['OS_GROUP'] == 'posix':
+        check_env.AppendENVPath('LD_LIBRARY_PATH', check_env.subst('$DISTDIR/cpp/lib'))
+    check_env.Check('check.passed', ajcheck_prog)
+    # The following two lines mean the ajcheck is not run by
+    # default, it must be explicitly specified on the command
+    # line, e.g. 'scons check'.
+    check_env.Ignore('.', 'check.passed')
+    check_env.Alias('check', 'check.passed')
+
+    # install gtest utilities
+    unittest_env.Install('$TESTDIR/cpp/bin', Dir('test_report').srcnode())

@@ -1,0 +1,19 @@
+Import('env')
+
+sample_env = env.Clone()
+
+sample_env.Append(LIBPATH = "#dist/lib")
+sample_env.Prepend(LIBS = "ajtcl")
+
+Export('sample_env')
+
+# Add/remove projects from build
+
+# Only build the following samples for the TARG operating system.
+# The samples/examples for target platforms are handled by
+# the target specific directory (viz. target/arduino).
+if sample_env['TARG'] in [ 'win32', 'linux', 'darwin' ]:
+    sample_env.SConscript(['basic/SConscript'])
+    sample_env.SConscript(['secure/SConscript'])
+    sample_env.SConscript(['network/SConscript'])
+

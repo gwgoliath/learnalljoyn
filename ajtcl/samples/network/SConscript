@@ -1,0 +1,6 @@
+Import('sample_env')
+
+progs = [
+    sample_env.Program('net_bus', ['NetworkAndBus.c'])
+]
+sample_env.Install("#dist/bin", progs)

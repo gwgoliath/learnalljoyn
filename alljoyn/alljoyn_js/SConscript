@@ -1,0 +1,109 @@
+# Copyright AllSeen Alliance. All rights reserved.
+#
+#    Permission to use, copy, modify, and/or distribute this software for any
+#    purpose with or without fee is hereby granted, provided that the above
+#    copyright notice and this permission notice appear in all copies.
+#
+#    THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+#    WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+#    MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+#    ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+#    WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+#    ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+#    OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+#
+
+import os
+import subprocess
+import sys
+import time
+
+Import('env')
+
+# Dependent Projects
+if not env.has_key('_ALLJOYNCORE_'):
+    env.SConscript('../alljoyn_core/SConscript')
+
+jsenv = env.Clone()
+
+if jsenv['BR'] == 'on':
+    # Build JS with bundled daemon support
+    jsenv.Prepend(LIBS = [jsenv['ajrlib']])
+
+jsenv['OBJDIR_ALLJOYN_JS'] = env['OBJDIR'] + '/alljoyn_js'
+
+vars = Variables()
+vars.Add(PathVariable('CORDOVA_BASE', 'Base directory of Cordova (aka PhoneGap)', os.environ.get('CORDOVA_BASE')))
+vars.Add(PathVariable('GECKO_BASE', 'Base directory of Gecko SDK', os.environ.get('GECKO_BASE')))
+vars.Add(PathVariable('JSDOC_DIR', 'The path to the JsDoc toolkit', os.environ.get('JSDOC_DIR'), PathVariable.PathIsDir))
+vars.Add('WIDLPROC', 'DO NOT USE, widlproc is no longer supported', os.environ.get('WIDLPROC'))
+
+vars.Update(jsenv)
+Help(vars.GenerateHelpText(jsenv))
+
+# JavaScript requires a couple of header files in alljoyn_core/src
+jsenv.Append(CPPPATH = [jsenv.Dir('../alljoyn_core/src').srcnode()])
+
+if '' == jsenv.subst('$GECKO_BASE') and '' == jsenv.subst('$CORDOVA_BASE'):
+    print 'Must specify either GECKO_BASE or CORDOVA_BASE build variable'
+    if not GetOption('help'):
+        Exit(1)
+
+sys.path.append(str(jsenv.Dir('../build_core/tools/scons').srcnode()))
+from jsstatus import JavaScriptStatus
+
+if jsenv.has_key('BULLSEYE_BIN'):
+    jsenv.PrependENVPath('PATH', jsenv.get('BULLSEYE_BIN'))
+
+if jsenv.has_key('JSDOC_DIR'):
+    jsenv.PrependENVPath('PATH', jsenv.get('JSDOC_DIR'))
+
+# add support for NPAPI plugins
+jsenv.Append(CPPDEFINES = '__STDC_LIMIT_MACROS')
+if jsenv['OS_CONF'] == 'windows':
+    jsenv.Append(CPPDEFINES = ['_WINDOWS', 'WIN32'])
+    if jsenv['CPU'] == 'x86_64':
+        jsenv.Append(CPPDEFINES = 'WIN64')
+
+# TODO
+# LOCAL_CFLAGS += -fvisibility=hidden
+# LOCAL_PRELINK_MODULE:=false
+
+# Make alljoyn_js dist a sub-directory of the alljoyn dist.  This avoids any conflicts with alljoyn dist targets.
+jsenv['JS_DISTDIR'] = jsenv['DISTDIR'] + '/js'
+
+# Add support for mulitiple build targets in the same workset
+jsenv.VariantDir('$OBJDIR_ALLJOYN_JS/jni', 'jni', duplicate = 0)
+
+# AllJoyn JavaScript status codes
+JavaScriptStatus('jni/Status.xml', 'jni/BusErrorInterface.cc')
+
+# AllJoyn plugin library
+libs = jsenv.SConscript('$OBJDIR_ALLJOYN_JS/jni/SConscript', exports = {'env': jsenv})
+if '' != jsenv.subst('$GECKO_BASE'):
+    jsenv.Install('$JS_DISTDIR/lib', libs)
+else:
+    jsenv.Install('$JS_DISTDIR/libs/armeabi', libs)
+
+# AllJoyn Cordova plugin - Java side
+if '' != jsenv.subst('$CORDOVA_BASE'):
+    jsenv.SConscript('src/SConscript', exports = {'env': jsenv})
+
+# AllJoyn samples
+jsenv.SConscript('samples/SConscript', exports = {'env': jsenv})
+
+# Plugin distributions
+if '' != jsenv.subst('$GECKO_BASE'):
+    if jsenv['OS_CONF'] == 'windows':
+        jsenv.Install('$JS_DISTDIR/plugin', ['alljoyn64.reg', 'alljoyn.reg', '$JS_DISTDIR/lib/npalljoyn.dll'])
+
+# Build docs
+if 'WIDLPROC' in jsenv:
+    print("******************************************")
+    print("* ERROR, widlproc is no longer supported *")
+    print("* please switch to JsDoc3                *")
+    print("******************************************")
+    Exit(1)
+
+if jsenv['DOCS'] == 'html':
+    jsenv.SConscript('docs/SConscript', exports = {'env': jsenv})
