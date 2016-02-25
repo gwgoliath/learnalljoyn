@@ -275,5 +275,7 @@ if env['WS'] != 'off' and not env.GetOption('clean'):
     ws = env.Command('#/ws', Dir('$DISTDIR'), wsbuild)
 if env['WS'] != 'off':
     env.Clean(env.File('SConscript'), env.File('#/whitespace.db'))
+env.Append(LIBPATH = ["/usr/lib/arm-linux-gnueabihf"])
+print "env OS %s, LIBPATH %s" %(env['OS'], env['LIBPATH'])
 
 Return('env')
