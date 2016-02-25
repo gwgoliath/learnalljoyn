@@ -189,6 +189,16 @@ QStatus WaitForJoinSessionCompletion(void)
 /** Do a method call, report the result to stdout, and return the result status. */
 QStatus MakeMethodCall(void)
 {
+	string former[3] = {
+		"Hello ",
+		"Hi ",
+		"Let's "
+	};
+	string latter[] = {
+		"World!",
+		"Alljoyn!",
+		"Dance!"
+	};
     ProxyBusObject remoteObj(*g_msgBus, SERVICE_NAME, SERVICE_PATH, s_sessionId);
     const InterfaceDescription* alljoynTestIntf = g_msgBus->GetInterface(INTERFACE_NAME);
 
@@ -197,11 +207,11 @@ QStatus MakeMethodCall(void)
 
     Message reply(*g_msgBus);
     MsgArg inputs[2];
-
+	QStatus status = ER_OK;
+#if 0
     inputs[0].Set("s", "Hello ");
     inputs[1].Set("s", "World!");
-
-    QStatus status = remoteObj.MethodCall(INTERFACE_NAME, "cat", inputs, 2, reply, 5000);
+    status = remoteObj.MethodCall(INTERFACE_NAME, "cat", inputs, 2, reply, 5000);
 
     if (ER_OK == status) {
         printf("'%s.%s' (path='%s') returned '%s'.\n", SERVICE_NAME, "cat",
@@ -209,7 +219,20 @@ QStatus MakeMethodCall(void)
     } else {
         printf("MethodCall on '%s.%s' failed.", SERVICE_NAME, "cat");
     }
+#else
+	for(int i = 0; i<3; i++){
+    	inputs[0].Set("s", former[i].c_str());
+    	inputs[1].Set("s", latter[i].c_str());
+    	status = remoteObj.MethodCall(INTERFACE_NAME, "cat", inputs, 2, reply, 5000);
 
+    	if (ER_OK == status) {
+        	printf("'%s.%s' (path='%s') returned '%s'.\n", SERVICE_NAME, "cat",
+        	       SERVICE_PATH, reply->GetArg(0)->v_string.str);
+    	} else {
+        	printf("MethodCall on '%s.%s' failed.", SERVICE_NAME, "cat");
+    	}	
+	}
+#endif
     return status;
 }
 
@@ -228,6 +251,7 @@ int CDECL_CALL main(int argc, char** argv, char** envArg)
         AllJoynShutdown();
         return 1;
     }
+    printf("Basic Client enter router: %s, %d", __FILE__, __LINE__);
 #endif
 
     printf("AllJoyn Library version: %s.\n", ajn::GetVersion());
