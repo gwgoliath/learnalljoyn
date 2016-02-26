@@ -1,2 +1,8 @@
 #exclude .pyc file#
 *.pyc
+
+#exclude temp files during compiling#
+/alljoyn/build/*
+/alljoyn/.sconf_temp/*
+/alljoyn/.sconsign.dblite
+/alljoyn/config.log
